@@ -688,6 +688,7 @@ extern Void_t*     sbrk();
   kernel versions newer than 1.3.77.
 */
 
+#define MREMAP_MAYMOVE 1
 #ifndef HAVE_MREMAP
 #ifdef linux
 #define HAVE_MREMAP 1
