@@ -89,6 +89,10 @@ tst-chunks$(T_SUF): tst-chunks.c $(LIB_MALLOC)
 	$(CC) $(CFLAGS) $(T_FLAGS) tst-chunks.c $(LIB_MALLOC) \
 	 $(THR_LIBS) -o $@
 
+tst-smalloc$(T_SUF): tst-smalloc.c $(LIB_MALLOC)
+	$(CC) $(CFLAGS) $(T_FLAGS) tst-smalloc.c $(LIB_MALLOC) \
+	 $(THR_LIBS) -o $@
+
 tst-mstats$(T_SUF): tst-mstats.c $(LIB_MALLOC)
 	$(CC) $(CFLAGS) $(T_FLAGS) tst-mstats.c $(LIB_MALLOC) \
 	 $(THR_LIBS) -o $@

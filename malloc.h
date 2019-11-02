@@ -125,6 +125,35 @@ extern int __malloc_initialized;
 /* Allocate SIZE bytes of memory.  */
 extern __malloc_ptr_t malloc __MALLOC_P ((size_t __size)) __attribute_malloc__;
 
+/**
+ * New Public Interfaces
+ */
+/* Allocate SIZE bytes of memory from specifc arena */
+extern __malloc_ptr_t smalloc __MALLOC_P ((size_t __size, unsigned int __arena_num)) __attribute_malloc__;
+
+/**
+ *  Create a new User Managed Arena.
+ *  User managed arenas are not used for
+ *  malloc by default functions.
+ *  They need to be specifically mentioned
+ *  as to which arena to fetch for malloc request.
+ */
+
+extern int arena_create __MALLOC_P (()) __attribute_malloc__;
+
+/* Set the Arena to secret.
+ * Secret arenas are not used for memory allocation
+ * when malloc is called.
+ * Memory can be allocated only from smalloc 
+ * Main arena can not be set to secret
+ */
+// extern int arena_set_secret __MALLOC_P ((int __arena_num)) __attribute_malloc__;
+
+// More APIs need to be added which 
+// have 
+/**
+ * End of new public interfaces
+ */
 /* Allocate NMEMB elements of SIZE bytes each, all initialized to 0.  */
 extern __malloc_ptr_t calloc __MALLOC_P ((size_t __nmemb, size_t __size))
        __attribute_malloc__;

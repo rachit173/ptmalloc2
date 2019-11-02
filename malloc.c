@@ -425,6 +425,7 @@ extern "C" {
 #define public_fREe      dlfree
 #define public_cFREe     dlcfree
 #define public_mALLOc    dlmalloc
+#define public_smALLOc   dlsmalloc
 #define public_mEMALIGn  dlmemalign
 #define public_rEALLOc   dlrealloc
 #define public_vALLOc    dlvalloc
@@ -446,6 +447,7 @@ extern "C" {
 #define public_fREe      __libc_free
 #define public_cFREe     __libc_cfree
 #define public_mALLOc    __libc_malloc
+#define public_smALLOc   __libc_smalloc
 #define public_mEMALIGn  __libc_memalign
 #define public_rEALLOc   __libc_realloc
 #define public_vALLOc    __libc_valloc
@@ -476,6 +478,8 @@ Void_t *(*__morecore)(ptrdiff_t) = __default_morecore;
 #define public_fREe      free
 #define public_cFREe     cfree
 #define public_mALLOc    malloc
+#define public_smALLOc   smalloc
+#define public_aRENa_cREAte arena_create
 #define public_mEMALIGn  memalign
 #define public_rEALLOc   realloc
 #define public_vALLOc    valloc
@@ -852,6 +856,44 @@ Void_t*  public_mALLOc();
 #endif
 #ifdef libc_hidden_proto
 libc_hidden_proto (public_mALLOc)
+#endif
+
+/*
+  smalloc(size_t n, unsigned int __arena_num)
+  Returns a pointer to a newly allocated chunk of at least n bytes from the arena "arena_num",
+  or null if no space is available. Additionally, on failure, errno is
+  set to ENOMEM on ANSI C systems.
+
+  If n is zero, smalloc returns a minumum-sized chunk. (The minimum
+  size is 16 bytes on most 32bit systems, and 24 or 32 bytes on 64bit
+  systems.)  On most systems, size_t is an unsigned type, so calls
+  with negative arguments are interpreted as requests for huge amounts
+  of space, which will often fail. The maximum supported value of n
+  differs across systems, but is in all cases less than the maximum
+  representable value of a size_t.
+*/
+#if __STD_C
+Void_t*  public_smALLOc(size_t, unsigned int);
+#else
+Void_t*  public_smALLOc(unsigned int);
+#endif
+#ifdef libc_hidden_proto
+libc_hidden_proto (public_smALLOc)
+#endif
+
+/*
+  int arena_create()
+  Return the arena number of the new arena created.
+
+
+*/
+#if __STD_C
+int  public_aRENa_cREAte();
+#else
+int  public_aRENa_cREAte();
+#endif
+#ifdef libc_hidden_proto
+libc_hidden_proto (public_aRENa_cREAte)
 #endif
 
 /*
@@ -2228,6 +2270,9 @@ struct malloc_state {
   /* Linked list */
   struct malloc_state *next;
 
+  /* Linked list for managed arenas */
+  int managed_arena;
+
   /* Memory allocated from the system in this arena.  */
   INTERNAL_SIZE_T system_mem;
   INTERNAL_SIZE_T max_system_mem;
@@ -2288,7 +2333,8 @@ static void malloc_init_state(av) mstate av;
 {
   int     i;
   mbinptr bin;
-
+  /* Set managed_arena flag of the malloc state */
+  av->managed_arena = 0;
   /* Establish circular links for normal bins */
   for (i = 1; i < NBINS; ++i) {
     bin = bin_at(av,i);
@@ -3375,6 +3421,89 @@ public_mALLOc(size_t bytes)
 }
 #ifdef libc_hidden_def
 libc_hidden_def(public_mALLOc)
+#endif
+
+Void_t*
+public_smALLOc(size_t bytes, unsigned int __arena_num)
+{
+  mstate ar_ptr;
+  Void_t *victim;
+
+  // @TODO : Add debugging hook for smalloc similar to that for malloc  
+  // __malloc_ptr_t (*hook) __MALLOC_P ((size_t, __const __malloc_ptr_t)) =
+  //   __malloc_hook;
+  // if (hook != NULL)
+  //   return (*hook)(bytes, RETURN_ADDRESS (0));
+  ar_ptr = _int_get_arena(__arena_num);
+  if(!ar_ptr) {
+    return 0;
+  }
+  (void)mutex_lock(&(ar_ptr->mutex));
+  victim = _int_malloc(ar_ptr, bytes);
+  (void)mutex_unlock(&(ar_ptr->mutex));
+//   if(!victim) {
+//     /* Maybe the failure is due to running out of mmapped areas. */
+//     if(ar_ptr != &main_arena) {
+//       (void)mutex_unlock(&ar_ptr->mutex);
+//       (void)mutex_lock(&main_arena.mutex);
+//       victim = _int_malloc(&main_arena, bytes);
+//       (void)mutex_unlock(&main_arena.mutex);
+//     } else {
+// #if USE_ARENAS
+//       /* ... or sbrk() has failed and there is still a chance to mmap() */
+//       ar_ptr = arena_get2(ar_ptr->next ? ar_ptr : 0, bytes);
+//       (void)mutex_unlock(&main_arena.mutex);
+//       if(ar_ptr) {
+//         victim = _int_malloc(ar_ptr, bytes);
+//         (void)mutex_unlock(&ar_ptr->mutex);
+//       }
+// #endif
+//     }
+//   } else
+//     (void)mutex_unlock(&ar_ptr->mutex);
+  assert(!victim || chunk_is_mmapped(mem2chunk(victim)) ||
+	 ar_ptr == arena_for_chunk(mem2chunk(victim)));
+  return victim;
+}
+#ifdef libc_hidden_def
+libc_hidden_def(public_smALLOc)
+#endif
+
+int
+public_aRENa_cREAte()
+{
+  mstate a;
+  a = _int_new_arena(0);
+  if(!a) {
+    return 0;
+  }
+
+  tsd_setspecific(arena_key, (Void_t *)a);
+  mutex_init(&a->mutex);
+  int err = mutex_lock(&a->mutex); /* remember result */
+
+  /* Add the new arena to the global list.  */
+  (void)mutex_lock(&list_lock);
+  a->next = main_arena.next;
+  atomic_write_barrier ();
+  main_arena.next = a;
+  (void)mutex_unlock(&list_lock);
+
+  if(err) /* locking failed; keep arena for further attempts later */
+    return 0;
+
+  a->managed_arena = 1;
+  THREAD_STAT(++(a->stat_lock_loop));
+  int k = 0;
+  mstate ptr = &main_arena;
+  while(ptr != a) {
+    ptr = ptr->next;
+    k++;
+  }
+  return k;  
+}
+#ifdef libc_hidden_def
+libc_hidden_def(public_aRENa_cREAte)
 #endif
 
 void

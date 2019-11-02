@@ -1,0 +1,8 @@
+*.a
+*.o
+*.out
+t-test1
+t-test2
+tst-mallocstate
+tst-mstats
+tst-smalloc

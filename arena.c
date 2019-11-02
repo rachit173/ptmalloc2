@@ -91,7 +91,7 @@ int __malloc_initialized = -1;
 #define arena_get(ptr, size) do { \
   Void_t *vptr = NULL; \
   ptr = (mstate)tsd_getspecific(arena_key, vptr); \
-  if(ptr && !mutex_trylock(&ptr->mutex)) { \
+  if(ptr && !mutex_trylock(&ptr->mutex) && !(ptr->managed_arena)) { \
     THREAD_STAT(++(ptr->stat_lock_direct)); \
   } else \
     ptr = arena_get2(ptr, (size)); \
@@ -693,7 +693,7 @@ arena_get2(a_tsd, size) mstate a_tsd; size_t size;
   /* Check the global, circularly linked list for available arenas. */
  repeat:
   do {
-    if(!mutex_trylock(&a->mutex)) {
+    if(!mutex_trylock(&a->mutex) && !(a->managed_arena)) {
       THREAD_STAT(++(a->stat_lock_loop));
       tsd_setspecific(arena_key, (Void_t *)a);
       return a;
