@@ -422,6 +422,7 @@ extern "C" {
 
 #ifdef USE_DL_PREFIX
 #define public_cALLOc    dlcalloc
+#define public_scALLOc    dlscalloc
 #define public_fREe      dlfree
 #define public_cFREe     dlcfree
 #define public_mALLOc    dlmalloc
@@ -444,6 +445,7 @@ extern "C" {
 
 /* Special defines for the GNU C library.  */
 #define public_cALLOc    __libc_calloc
+#define public_scALLOc   __libc_scalloc
 #define public_fREe      __libc_free
 #define public_cFREe     __libc_cfree
 #define public_mALLOc    __libc_malloc
@@ -475,6 +477,7 @@ Void_t *(*__morecore)(ptrdiff_t) = __default_morecore;
 
 #else /* !_LIBC */
 #define public_cALLOc    calloc
+#define public_scALLOc   scalloc
 #define public_fREe      free
 #define public_cFREe     cfree
 #define public_mALLOc    malloc
@@ -925,6 +928,17 @@ libc_hidden_proto (public_fREe)
 Void_t*  public_cALLOc(size_t, size_t);
 #else
 Void_t*  public_cALLOc();
+#endif
+
+/*
+  scalloc(size_t n_elements, size_t element_size);
+  Returns a pointer to n_elements * element_size bytes, with all locations
+  set to zero.
+*/
+#if __STD_C
+Void_t*  public_scALLOc(size_t, size_t, unsigned int);
+#else
+Void_t*  public_scALLOc();
 #endif
 
 /*
@@ -1555,6 +1569,8 @@ Void_t*         _int_memalign(mstate, size_t, size_t);
 Void_t*         _int_valloc(mstate, size_t);
 static Void_t*  _int_pvalloc(mstate, size_t);
 /*static Void_t*  cALLOc(size_t, size_t);*/
+static Void_t*  scALLOc(size_t, size_t);
+
 static Void_t** _int_icalloc(mstate, size_t, size_t, Void_t**);
 static Void_t** _int_icomalloc(mstate, size_t, size_t*, Void_t**);
 static int      mTRIm(size_t);
@@ -3600,6 +3616,14 @@ public_rEALLOc(Void_t* oldmem, size_t bytes)
 #endif
 
   ar_ptr = arena_for_chunk(oldp);
+  /**
+   * Check if the arena is a secret arena.
+   * For a secret arena memory can only be rellocated to
+   * the same arena
+  */
+  // if (ar_ptr->managed_arena) {
+  //   return NULL;
+  // }
 #if THREAD_STATS
   if(!mutex_trylock(&ar_ptr->mutex))
     ++(ar_ptr->stat_lock_direct);
@@ -3834,6 +3858,70 @@ public_cALLOc(size_t n, size_t elem_size)
     }
   }
 
+  return mem;
+}
+
+Void_t*
+public_scALLOc(size_t n, size_t elem_size, unsigned int __arena_num)
+{
+  mstate av;
+  mchunkptr oldtop, p;
+  INTERNAL_SIZE_T bytes, sz, csz, oldtopsize;
+  Void_t* mem;
+  unsigned long clearsize;
+  unsigned long nclears;
+  INTERNAL_SIZE_T* d;
+  __malloc_ptr_t (*hook) __MALLOC_PMT ((size_t, __const __malloc_ptr_t)) =
+    __malloc_hook;
+
+  /* size_t is unsigned so the behavior on overflow is defined.  */
+  bytes = n * elem_size;
+#define HALF_INTERNAL_SIZE_T \
+  (((INTERNAL_SIZE_T) 1) << (8 * sizeof (INTERNAL_SIZE_T) / 2))
+  if (__builtin_expect ((n | elem_size) >= HALF_INTERNAL_SIZE_T, 0)) {
+    if (elem_size != 0 && bytes / elem_size != n) {
+      MALLOC_FAILURE_ACTION;
+      return 0;
+    }
+  }
+
+//   if (hook != NULL) {
+//     sz = bytes;
+//     mem = (*hook)(sz, RETURN_ADDRESS (0));
+//     if(mem == 0)
+//       return 0;
+// #ifdef HAVE_MEMCPY
+//     return memset(mem, 0, sz);
+// #else
+//     while(sz > 0) ((char*)mem)[--sz] = 0; /* rather inefficient */
+//     return mem;
+// #endif
+//   }
+
+  sz = bytes;
+  av = _int_get_arena(__arena_num);
+  if(!av)
+    return 0;
+  (void)mutex_lock(&(av->mutex));
+  /* Check if we hand out the top chunk, in which case there may be no
+     need to clear. */
+#if MORECORE_CLEARS
+  oldtop = top(av);
+  oldtopsize = chunksize(top(av));
+#if MORECORE_CLEARS < 2
+  /* Only newly allocated memory is guaranteed to be cleared.  */
+  if (av == &main_arena &&
+      oldtopsize < mp_.sbrk_base + av->max_system_mem - (char *)oldtop)
+    oldtopsize = (mp_.sbrk_base + av->max_system_mem - (char *)oldtop);
+#endif
+#endif
+  mem = _int_malloc(av, sz);
+
+  /* Only clearing follows, so we can unlock early. */
+  (void)mutex_unlock(&av->mutex);
+
+  assert(!mem || chunk_is_mmapped(mem2chunk(mem)) ||
+	 av == arena_for_chunk(mem2chunk(mem)));
   return mem;
 }
 

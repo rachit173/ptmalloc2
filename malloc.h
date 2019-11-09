@@ -131,6 +131,10 @@ extern __malloc_ptr_t malloc __MALLOC_P ((size_t __size)) __attribute_malloc__;
 /* Allocate SIZE bytes of memory from specifc arena */
 extern __malloc_ptr_t smalloc __MALLOC_P ((size_t __size, unsigned int __arena_num)) __attribute_malloc__;
 
+/* Allocate NMEMB elements of SIZE bytes each, all initialized to 0.  */
+extern __malloc_ptr_t scalloc __MALLOC_P ((size_t __nmemb, size_t __size, unsigned int __arena_num))
+       __attribute_malloc__;
+
 /**
  *  Create a new User Managed Arena.
  *  User managed arenas are not used for
