@@ -931,7 +931,7 @@ Void_t*  public_cALLOc();
 #endif
 
 /*
-  scalloc(size_t n_elements, size_t element_size);
+  scalloc(size_t n_elements, size_t element_size, unsigned int __arena_num);
   Returns a pointer to n_elements * element_size bytes, with all locations
   set to zero.
 */

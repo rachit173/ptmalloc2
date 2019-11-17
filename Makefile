@@ -44,7 +44,8 @@ LIB_MALLOC = libmalloc.a
 
 T_SUF =
 TESTS = t-test1$(T_SUF) t-test2$(T_SUF) \
-        tst-mallocstate$(T_SUF) tst-mstats$(T_SUF)
+        tst-mallocstate$(T_SUF) tst-mstats$(T_SUF) \
+        tst-smalloc$(T_SUF) tst-chunks$(T_SUF) tst-scalloc$(T_SUF)
 
 CFLAGS = $(SYS_FLAGS) $(OPT_FLAGS) $(WARN_FLAGS) $(THR_FLAGS) $(INC_FLAGS)
 
@@ -91,6 +92,10 @@ tst-chunks$(T_SUF): tst-chunks.c $(LIB_MALLOC)
 
 tst-smalloc$(T_SUF): tst-smalloc.c $(LIB_MALLOC)
 	$(CC) $(CFLAGS) $(T_FLAGS) tst-smalloc.c $(LIB_MALLOC) \
+	 $(THR_LIBS) -o $@
+
+tst-scalloc$(T_SUF): tst-scalloc.c $(LIB_MALLOC)
+	$(CC) $(CFLAGS) $(T_FLAGS) tst-scalloc.c $(LIB_MALLOC) \
 	 $(THR_LIBS) -o $@
 
 tst-mstats$(T_SUF): tst-mstats.c $(LIB_MALLOC)

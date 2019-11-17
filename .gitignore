@@ -6,3 +6,4 @@ t-test2
 tst-mallocstate
 tst-mstats
 tst-smalloc
+tst-scalloc
